@@ -4,6 +4,7 @@ import type { FileItem } from "../hooks/useFileManager";
 import { useNavigate } from "react-router";
 import RenameModal from "./RenameModal";
 import Modal from "./Modal";
+import CreateFileModal from "./CreateFileModal";
 
 export default function Sidebar({
   files,
@@ -12,7 +13,7 @@ export default function Sidebar({
   onRename,
 }: {
   files: FileItem[];
-  onCreateFile: (ext: "md" | "txt") => void;
+  onCreateFile: (type: "md" | "txt", name: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, newName: string) => void;
 }) {
@@ -20,6 +21,9 @@ export default function Sidebar({
   const [open, setOpen] = useState(true);
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
+  const [createModalType, setCreateModalType] = useState<"md" | "txt" | null>(
+    null
+  );
 
   return (
     <div
@@ -51,26 +55,20 @@ export default function Sidebar({
       <div className="p-4 flex flex-col gap-2">
         {/* MD Button */}
         <button
-          onClick={() => onCreateFile("md")}
-          className={`flex items-center gap-3 p-3 rounded-xl bg-white/10 hover:bg-white/20 ${
-            !open ? "justify-center" : ""
-          }`}
+          onClick={() => setCreateModalType("md")}
+          className="flex items-center gap-3 p-3 rounded-xl bg-white/10 hover:bg-white/20"
         >
-          <FilePlus className="w-5 h-5 shrink-0" /> {/* FIX */}
-          {open && (
-            <span className="whitespace-nowrap">New Markdown (.md)</span>
-          )}
+          <FilePlus className="w-5 h-5" />
+          {open && <span>New Markdown (.md)</span>}
         </button>
 
         {/* TXT Button */}
         <button
-          onClick={() => onCreateFile("txt")}
-          className={`flex items-center gap-3 p-3 rounded-xl bg-white/10 hover:bg-white/20 ${
-            !open ? "justify-center" : ""
-          }`}
+          onClick={() => setCreateModalType("txt")}
+          className="flex items-center gap-3 p-3 rounded-xl bg-white/10 hover:bg-white/20"
         >
-          <FilePlus className="w-5 h-5 shrink-0" /> {/* FIX */}
-          {open && <span className="whitespace-nowrap">New Text (.txt)</span>}
+          <FilePlus className="w-5 h-5" />
+          {open && <span>New Text (.txt)</span>}
         </button>
       </div>
 
@@ -85,7 +83,9 @@ export default function Sidebar({
               className={`flex cursor-pointer items-center gap-3 flex-1 ${
                 !open ? "justify-center" : ""
               }`}
-              onClick={() => navigate(`/file/${file.id}`)}
+              onClick={() => {
+                navigate(`/file/${file.id}`);
+              }}
             >
               <FileText className="w-5 h-5 shrink-0" />
               {open && file.name}
@@ -104,6 +104,15 @@ export default function Sidebar({
           </div>
         ))}
       </div>
+
+      <CreateFileModal
+        open={!!createModalType}
+        onClose={() => setCreateModalType(null)}
+        onCreate={(userName: string) => {
+          onCreateFile(createModalType!, userName); // pass to parent
+          setCreateModalType(null);
+        }}
+      />
 
       <RenameModal
         open={!!renameTarget}

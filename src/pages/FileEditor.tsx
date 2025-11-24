@@ -1,61 +1,92 @@
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
 import Sidebar from "../utils/Sidebar";
 import { useFiles } from "../context/FileContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import MDEditor from "@uiw/react-md-editor";
+import LoaderOverlay from "../utils/LoaderOverlay";
+import type { FileItem } from "../hooks/useFileManager";
+import { useDebounce } from "../hooks/useDebounce";
 
 export default function FileEditor() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { files, createFile, deleteFile, renameFile, updateContent } =
+  const { files, createFile, deleteFile, renameFile, updateContent, loading } =
     useFiles();
 
-  const file = files.find((f) => f.id === id);
-  const fileExtension = file?.name.split(".")[1];
+  const [currentFile, setCurrentFile] = useState<FileItem | null>(null);
+  const [extension, setExtension] = useState<string | null>(null);
+  const debouncedContent = useDebounce(currentFile?.content ?? "", 800);
 
   useEffect(() => {
-    if (files.length === 0 || !file) {
-      navigate("/dashboard");
+    if (!id) return;
+
+    const found = files.find((f) => f.id === id) || null;
+    setCurrentFile(found);
+
+    if (found) {
+      const ext = found.name.split(".").pop() || null;
+      setExtension(ext);
+    } else {
+      setExtension(null);
     }
-  }, [files, file]);
+  }, [id, files]);
 
+  useEffect(() => {
+    if (!currentFile) return;
+    updateContent(currentFile.id, debouncedContent);
+  }, [debouncedContent]);
+
+  const isLoading = files.length === 0;
   return (
-    <div
-      className="min-h-screen flex bg-black text-white"
-      data-color-mode="dark"
-    >
-      <Sidebar
-        files={files}
-        onCreateFile={(ext) => createFile("untitled", ext)}
-        onDelete={deleteFile}
-        onRename={renameFile}
-      />
+    <>
+      {isLoading ? (
+        <LoaderOverlay show={loading} text={"Loading File..."} />
+      ) : (
+        <LoaderOverlay show={loading} text="Saving to Google Drive..." />
+      )}
 
-      <div className="h-screen   flex-1 p-10">
-        {!file ? (
-          <p>File not found...</p>
-        ) : (
-          <>
-            <h1 className="text-3xl font-bold mb-4">{file.name}</h1>
+      <div
+        className="min-h-screen flex bg-black text-white"
+        data-color-mode="dark"
+      >
+        <Sidebar
+          files={files}
+          onCreateFile={(type, name) => createFile(name, type)}
+          onDelete={deleteFile}
+          onRename={renameFile}
+        />
+        {!currentFile && (
+          <p className="h-screen   flex-1 p-10">File Not Found...</p>
+        )}
+        {currentFile && (
+          <div className="h-screen   flex-1 p-10">
+            <h1 className="text-3xl font-bold mb-4">{currentFile.name}</h1>
 
             <div className="bg-black  h-[95%]  p-3">
-              {fileExtension === "md" ? (
+              {extension === "md" ? (
                 <MDEditor
-                  value={file.content}
-                  onChange={(val) => updateContent(file.id, val ?? "")}
+                  value={currentFile.content}
+                  onChange={(val) =>
+                    setCurrentFile((f) =>
+                      f ? { ...f, content: val ?? "" } : null
+                    )
+                  }
                   height={window.innerHeight * 0.95 - 100}
                 />
               ) : (
                 <textarea
-                  value={file.content}
-                  onChange={(e) => updateContent(file.id, e.target.value)}
+                  value={currentFile.content}
+                  onChange={(e) =>
+                    setCurrentFile((f) =>
+                      f ? { ...f, content: e.target.value } : null
+                    )
+                  }
                   className="w-full h-full bg-black border border-white/20 p-4 rounded-xl text-white outline-none"
                 />
               )}
             </div>
-          </>
+          </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
