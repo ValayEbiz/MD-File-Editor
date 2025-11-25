@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import Cookies from "js-cookie";
 import {
+  createSubFolder,
   deleteDriveFile,
   fetchAllDriveFiles,
+  getOrCreateFolder,
   initGapi,
   initTokenClient,
   renameDriveFile,
@@ -14,14 +16,23 @@ export interface FileItem {
   id: string;
   driveId: string;
   name: string;
-  type: "md" | "txt";
-  content: string;
+  type: "md" | "txt" | "folder";
+  content?: string;
+  parent?: string | null;
+}
+export interface FileNode extends FileItem {
+  children?: FileNode[];
 }
 
 export interface FileManager {
   files: FileItem[];
   activeFile: FileItem | null;
-  createFile: (name: string, type: "md" | "txt") => void;
+  createFile: (
+    name: string,
+    type: "md" | "txt",
+    parentId: string | null
+  ) => void;
+  createFolder: (folderName: string, parentId: string | null) => void;
   renameFile: (id: string, newName: string) => void;
   deleteFile: (id: string) => void;
   updateContent: (id: string, text: string) => void;
@@ -52,10 +63,10 @@ export default function useFileManager() {
   // ✔️ Sync Google Drive → Merge with LocalStorage
   useEffect(() => {
     (async () => {
-      initTokenClient();
       await initGapi();
-      const driveFiles = await fetchAllDriveFiles();
+      initTokenClient();
 
+      const driveFiles = await fetchAllDriveFiles();
       // Create array of FileItem (not promises)
       const mapped = await Promise.all(
         driveFiles.map(
@@ -64,12 +75,14 @@ export default function useFileManager() {
             name: any;
             content: any;
             type: any;
+            parent: string;
           }) => ({
             id: await getDeterministicId(f.driveId),
             driveId: f.driveId,
             name: f.name,
             content: f.content,
             type: f.type,
+            parent: f.parent,
           })
         )
       );
@@ -92,42 +105,47 @@ export default function useFileManager() {
   }, [token]);
 
   // Create file
-  // Create file
-  const createFile = async (baseName: string, type: "md" | "txt") => {
+  const createFile = async (
+    baseName: string,
+    type: "md" | "txt",
+    parentDriveId: string | null
+  ) => {
     setLoading(true);
 
-    // Ensure unique name
+    // Unique name handling
     let name = `${baseName}.${type}`;
     let counter = 1;
 
-    while (files.some((f) => f.name === name)) {
+    while (files.some((f) => f.name === name && f.parent === parentDriveId)) {
       name = `${baseName} (${counter}).${type}`;
       counter++;
     }
 
-    // 1️⃣ Create in Google Drive first
-    const uploaded = await uploadOrUpdateFile(null, name, "");
+    // Upload to Drive with correct parent folder
+    const uploaded = await uploadOrUpdateFile(
+      null,
+      name,
+      "",
+      parentDriveId // <-- new param
+    );
+
     if (!uploaded?.id) {
       setLoading(false);
       return;
     }
 
-    const driveId = uploaded.id;
+    const deterministicId = await getDeterministicId(uploaded.id);
 
-    // 2️⃣ Create deterministic local ID from driveId
-    const deterministicId = await getDeterministicId(driveId);
-
-    // 3️⃣ Add locally
     const newFile: FileItem = {
       id: deterministicId,
-      driveId,
+      driveId: uploaded.id,
       name,
       type,
       content: "",
+      parent: parentDriveId,
     };
 
     setFiles((prev) => [...prev, newFile]);
-
     setLoading(false);
   };
 
@@ -175,9 +193,37 @@ export default function useFileManager() {
       return updated;
     });
 
-    // Upload correct content
+    const file = files.find((f) => f.id === id);
     if (!driveId) return;
-    await uploadOrUpdateFile(driveId, name, text);
+
+    await uploadOrUpdateFile(driveId, name, text, file?.parent || null);
+  };
+
+  const createFolder = async (
+    folderName: string,
+    parentDriveId: string | null
+  ) => {
+    setLoading(true);
+
+    const parent = parentDriveId || (await getOrCreateFolder());
+    if (!parent) {
+      setLoading(false);
+      return;
+    }
+
+    const folder = await createSubFolder(folderName, parent);
+    const deterministicId = await getDeterministicId(folder.id);
+
+    const newFolder: FileItem = {
+      id: deterministicId,
+      driveId: folder.id,
+      name: folder.name,
+      type: "folder",
+      parent: parent, // <-- KEY
+    };
+
+    setFiles((prev) => [...prev, newFolder]);
+    setLoading(false);
   };
 
   return {
@@ -186,6 +232,7 @@ export default function useFileManager() {
     createFile,
     renameFile,
     deleteFile,
+    createFolder,
     updateContent,
     setActiveFile,
     loading,

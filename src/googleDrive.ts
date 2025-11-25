@@ -118,7 +118,8 @@ export const getOrCreateFolder = async (): Promise<string | null> => {
 export const uploadOrUpdateFile = async (
   fileId: string | null,
   name: string,
-  content: string
+  content: string,
+  parentId: string | null
 ) =>
   withAutoRefresh(async () => {
     await gapi.client.load("drive", "v3");
@@ -129,7 +130,7 @@ export const uploadOrUpdateFile = async (
 
     const metadata = fileId
       ? { name }
-      : { name, parents: [await getOrCreateFolder()] };
+      : { name, parents: [parentId || (await getOrCreateFolder())] };
 
     const multipartRequestBody =
       delimiter +
@@ -175,31 +176,59 @@ export const renameDriveFile = (fileId: string, newName: string) =>
     })
   );
 
+export const createSubFolder = async (name: string, parentId: string) =>
+  withAutoRefresh(async () => {
+    const folder = await gapi.client.drive.files.create({
+      resource: {
+        name,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: [parentId],
+      },
+      fields: "id, name",
+    });
+
+    return folder.result;
+  });
+
 export const fetchAllDriveFiles = async () =>
   withAutoRefresh(async () => {
     const accessToken = getAccessToken();
     if (!accessToken) return [];
 
-    const folderId = await getOrCreateFolder();
-    if (!folderId) return [];
-
     const res: any = await gapi.client.drive.files.list({
-      q: `'${folderId}' in parents and trashed=false`,
-      fields: "files(id, name)",
+      q: "trashed=false",
+      fields: "files(id, name, mimeType, parents)",
     });
 
+    const rootId = await getOrCreateFolder();
     const final: any[] = [];
-    for (const file of res.result.files) {
+
+    for (const f of res.result.files) {
+      // Skip if not in our root tree
+      if (!f.parents?.includes(rootId) && f.parents?.length === 0) continue;
+
+      if (f.mimeType === "application/vnd.google-apps.folder") {
+        final.push({
+          driveId: f.id,
+          name: f.name,
+          type: "folder",
+          parent: f.parents?.[0] ?? null,
+          content: "",
+        });
+        continue;
+      }
+
       const content = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+        `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       ).then((r) => r.text());
 
       final.push({
-        driveId: file.id,
-        name: file.name,
+        driveId: f.id,
+        name: f.name,
+        type: f.name.endsWith(".md") ? "md" : "txt",
         content,
-        type: file.name.endsWith(".md") ? "md" : "txt",
+        parent: f.parents?.[0] ?? null,
       });
     }
 

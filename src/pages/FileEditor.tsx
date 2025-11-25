@@ -9,8 +9,15 @@ import { useDebounce } from "../hooks/useDebounce";
 
 export default function FileEditor() {
   const { id } = useParams();
-  const { files, createFile, deleteFile, renameFile, updateContent, loading } =
-    useFiles();
+  const {
+    files,
+    createFile,
+    deleteFile,
+    renameFile,
+    updateContent,
+    loading,
+    createFolder,
+  } = useFiles();
 
   const [currentFile, setCurrentFile] = useState<FileItem | null>(null);
   const [extension, setExtension] = useState<string | null>(null);
@@ -50,7 +57,10 @@ export default function FileEditor() {
       >
         <Sidebar
           files={files}
-          onCreateFile={(type, name) => createFile(name, type)}
+          onCreateFile={(type, name, parentId) => {
+            if (type === "folder") createFolder(name, parentId || null);
+            else createFile(name, type, parentId || null);
+          }}
           onDelete={deleteFile}
           onRename={renameFile}
         />

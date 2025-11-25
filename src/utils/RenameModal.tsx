@@ -4,6 +4,7 @@ import Modal from "./Modal";
 export default function RenameModal({
   open,
   initial,
+  modalType,
   existingNames,
   onClose,
   onSave,
@@ -45,7 +46,11 @@ export default function RenameModal({
   };
 
   return (
-    <Modal open={open} title="Rename File" onClose={onClose}>
+    <Modal
+      open={open}
+      title={`Rename ${modalType === "folder" ? "folder" : "file"}`}
+      onClose={onClose}
+    >
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}

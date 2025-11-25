@@ -18,6 +18,7 @@ export default function Dashboard() {
     renameFile,
     updateContent,
     loading,
+    createFolder,
   } = useFileManager();
 
   const quotes = [
@@ -44,9 +45,10 @@ export default function Dashboard() {
         {/* SIDEBAR */}
         <Sidebar
           files={files}
-          onCreateFile={async (type, name) => {
+          onCreateFile={async (type, name, parentId) => {
             setLoadingText("Creating File...");
-            await createFile(name, type);
+            if (type === "folder") createFolder(name, parentId || null);
+            else createFile(name, type, parentId || null);
             setLoadingText("Fetching files...");
           }}
           // onOpen={setActiveFile}

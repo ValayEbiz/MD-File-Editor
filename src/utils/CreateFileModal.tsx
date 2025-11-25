@@ -3,22 +3,38 @@ import Modal from "./Modal";
 
 export default function CreateFileModal({
   open,
+  modalType,
   onClose,
   onCreate,
 }: {
   open: boolean;
+  modalType: "md" | "txt" | "folder" | null;
   onClose: () => void;
   onCreate: (name: string) => void;
 }) {
   const [name, setName] = useState("");
 
   return (
-    <Modal open={open} title="Create New File" onClose={onClose}>
+    <Modal
+      open={open}
+      title={
+        modalType === "folder"
+          ? "Create New Folder"
+          : modalType === "txt"
+          ? "Create New Text File"
+          : "Create New Markdown File"
+      }
+      onClose={onClose}
+    >
       <div className="space-y-4">
         <input
           type="text"
           value={name}
-          placeholder="Enter file name (without extension)"
+          placeholder={
+            modalType === "folder"
+              ? "Enter folder name"
+              : "Enter file name (without extension)"
+          }
           onChange={(e) => setName(e.target.value)}
           className="w-full p-3 bg-white/10 rounded-xl outline-none border border-white/20"
         />
